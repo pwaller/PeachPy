@@ -21,6 +21,7 @@ class RegisterAllocator:
                 conflict_virtual_id = -conflict_internal_id
                 self.conflicting_registers.setdefault(conflict_virtual_id, set())
                 self.conflicting_registers[conflict_virtual_id].add(-virtual_id)
+        print("      Conflicts for virtual {} are now {}".format(virtual_id, self.conflicting_registers))
 
     def set_allocation_options(self, abi, register_kind):
         physical_ids = \
@@ -48,6 +49,8 @@ class RegisterAllocator:
                     pass
         self.allocation_options[virtual_id] = [physical_id]
         self.register_allocations[virtual_id] = physical_id
+        print("RegisterAllocator._bind_register: Allocate virtual {} to physical {}".format(virtual_id, physical_id))
+        print("RegisterAllocator._bind_register: Considered conflicts {}".format(self.conflicting_registers[virtual_id]))
 
     def try_allocate_register(self, virtual_id, physical_id):
         assert virtual_id > 0

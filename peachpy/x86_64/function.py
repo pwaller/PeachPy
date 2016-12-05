@@ -361,6 +361,11 @@ class Function:
         input_registers = []
         output_registers = []
         for instruction in self._instructions:
+            print("'{}' in_mask {}; out_mask {}".format(
+                instruction,
+                instruction.input_registers_masks,
+                instruction.output_registers_masks,
+            ))
             input_registers.append(instruction.input_registers_masks)
             output_registers.append(instruction.output_registers_masks)
 
@@ -446,6 +451,7 @@ class Function:
             def live_registers_list(self):
                 from peachpy.x86_64.registers import Register
                 live_registers_list = []
+                print("live_registers_list() masks: {}".format(self.live_register_masks))
                 live_registers_masks = self.live_register_masks.copy()
                 for (input_registers, output_registers) in \
                         reversed(list(zip(self.input_registers_list, self.output_registers_list))):
@@ -463,6 +469,7 @@ class Function:
                             live_registers_masks.get(input_register_id, 0) | input_register_mask
                     # Record available registers for current instruction
                     live_registers_list.append(live_registers_masks.copy())
+                print("live_registers_list {} -> {}".format(self, live_registers_list))
                 live_registers_list.reverse()
                 return live_registers_list
 
@@ -473,6 +480,7 @@ class Function:
                 return str(self)
 
             def analyze_availability(self, extra_available_registers):
+                print("analyze_availability -> {}".format(self.produced_register_masks))
                 self.availability_analysis_passes += 1
 
                 if self.availability_analysis_passes == 1:
@@ -509,6 +517,7 @@ class Function:
                 # 2. Mark registers which are produced to by the basic block as non-live.
                 # 3. Mark registers which are consumed by the basic block as live (only on first pass).
 
+                print("Consider block {}".format(self))
                 self.liveness_analysis_passes += 1
 
                 # Steps 1 and 2
@@ -541,6 +550,7 @@ class Function:
                         input_block.analyze_liveness(extra_live_registers.copy())
                     # Optimization: do not create a copy of the dict
                     self.input_blocks[0].analyze_liveness(extra_live_registers)
+                print("analyze_liveness {} {}".format(self, extra_live_registers))
 
             def analyze_reachability(self):
                 if not self.is_reachable:
@@ -669,6 +679,7 @@ class Function:
             for (instruction, available_registers, live_registers) in \
                     zip(self._instructions[basic_block.start_position:basic_block.end_position],
                         basic_block.available_registers_list, basic_block.live_registers_list):
+                print("_analize availability: {} -> live_registers: {}".format(instruction, live_registers))
                 instruction._live_registers = live_registers
                 instruction._available_registers = available_registers
             # Remove referenced to input/output blocks to avoid memory leaks due to cycles in ref graph
@@ -681,11 +692,19 @@ class Function:
             unallocated_registers = instruction.input_registers
             unallocated_registers.update(output_registers)
             unallocated_registers = filter(operator.attrgetter("is_virtual"), unallocated_registers)
+            unallocated_registers = list(unallocated_registers)
+            print("_analize (conflicts)  '{}' inp: {}; out: {}; unalloc: {}; live: {}".format(
+                instruction,
+                instruction.input_registers,
+                instruction.output_registers,
+                unallocated_registers,
+                instruction._live_registers))
             for virtual_register in unallocated_registers:
                 # TODO: generalize conflicts
                 conflict_internal_ids = [reg_id for (reg_id, reg_mask)
                                          in six.iteritems(instruction._live_registers)
                                          if reg_mask & virtual_register.mask != 0]
+                print("    {}::conflict_internal_ids: {}".format(virtual_register, conflict_internal_ids))
                 self._register_allocators[virtual_register.kind].add_conflicts(
                     virtual_register.virtual_id, conflict_internal_ids)
             output_registers = instruction.output_registers
@@ -812,6 +831,7 @@ class Function:
                     register.physical_id = \
                         self._register_allocators[register.kind].register_allocations.get(
                             register._internal_id, register.physical_id)
+                    print("Function._bind_registers {} to {}".format(register, register.physical_id))
 
     def _allocate_local_variable(self):
         """Returns a new unique ID for a local variable"""
@@ -970,6 +990,8 @@ class ABIFunction:
         self._filter_instruction_encodings()
 
         self.mangled_name = self.mangle_name()
+
+        print(self.format())
 
     def _update_argument_loads(self, arguments):
         from peachpy.x86_64.pseudo import LOAD
